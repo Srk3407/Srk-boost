@@ -3,25 +3,22 @@ name: Build SRK Boost MSI
 on:
   push:
     branches: [ main, master ]
-  workflow_dispatch:   # allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    
+
     steps:
-    # ── 1. Checkout ────────────────────────────────────────────────────────
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # ── 2. Python setup ────────────────────────────────────────────────────
     - name: Set up Python 3.11
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
         architecture: "x64"
 
-    # ── 3. Install dependencies ────────────────────────────────────────────
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
@@ -29,27 +26,24 @@ jobs:
         pip install psutil pywin32 wmi speedtest-cli qt-material Pillow
         pip install pyinstaller
 
-    # ── 4. Build EXE with PyInstaller ─────────────────────────────────────
     - name: Build EXE
       run: |
         pyinstaller SrkBoost.spec --clean --noconfirm
-      
+
     - name: Verify EXE exists
       run: |
         if (!(Test-Path "dist\SRK Boost\SRK Boost.exe")) {
           Write-Error "EXE not found!"
           exit 1
         }
-        Write-Host "EXE size: $((Get-Item 'dist\SRK Boost\SRK Boost.exe').Length / 1MB) MB"
+        Write-Host "EXE built successfully"
 
-    # ── 5. Install WiX Toolset ─────────────────────────────────────────────
     - name: Install WiX Toolset
       run: |
-        dotnet tool install --global wix
-        wix extension add WixToolset.UI.wixext
-        wix extension add WixToolset.Util.wixext
+        dotnet tool install --global wix --version 4.0.5
+        wix extension add -g WixToolset.UI.wixext/4.0.5
+        wix extension add -g WixToolset.Util.wixext/4.0.5
 
-    # ── 6. Build MSI ───────────────────────────────────────────────────────
     - name: Build MSI
       run: |
         New-Item -ItemType Directory -Force -Path release
@@ -57,7 +51,7 @@ jobs:
           -ext WixToolset.UI.wixext `
           -ext WixToolset.Util.wixext `
           -o release\SrkBoost-v1.7-Setup.msi
-      
+
     - name: Verify MSI exists
       run: |
         if (!(Test-Path "release\SrkBoost-v1.7-Setup.msi")) {
@@ -66,16 +60,14 @@ jobs:
         }
         Write-Host "MSI size: $((Get-Item 'release\SrkBoost-v1.7-Setup.msi').Length / 1MB) MB"
 
-    # ── 7. Upload as artifact ──────────────────────────────────────────────
-    - name: Upload MSI artifact
+    - name: Upload MSI
       uses: actions/upload-artifact@v4
       with:
         name: SrkBoost-MSI
         path: release\SrkBoost-v1.7-Setup.msi
         retention-days: 30
 
-    # ── 8. Also upload portable ZIP ───────────────────────────────────────
-    - name: Upload portable EXE artifact
+    - name: Upload Portable EXE
       uses: actions/upload-artifact@v4
       with:
         name: SrkBoost-Portable
