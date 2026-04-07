@@ -26,22 +26,21 @@ jobs:
         pip install psutil pywin32 wmi speedtest-cli qt-material Pillow
         pip install pyinstaller
 
-    - name: Build EXE with PyInstaller
+    - name: Build EXE (onefile)
       run: |
         pyinstaller SrkBoost.spec --clean --noconfirm
         Write-Host "=== dist contents ==="
-        Get-ChildItem -Recurse "dist\SRK Boost" | Select-Object FullName | Head -30
+        Get-ChildItem dist | Select-Object Name, Length
 
     - name: Verify EXE
       run: |
-        $exe = "dist\SRK Boost\SRK Boost.exe"
+        $exe = "dist\SRK Boost.exe"
         if (!(Test-Path $exe)) {
-          Write-Host "=== dist folder ==="
-          Get-ChildItem -Recurse dist | Select-Object FullName
-          Write-Error "EXE not found!"
+          Get-ChildItem -Recurse dist
+          Write-Error "EXE not found at $exe"
           exit 1
         }
-        Write-Host "EXE OK: $((Get-Item $exe).Length / 1MB) MB"
+        Write-Host "EXE OK: $([math]::Round((Get-Item $exe).Length / 1MB, 1)) MB"
 
     - name: Install WiX Toolset
       run: |
@@ -51,7 +50,7 @@ jobs:
 
     - name: Build MSI
       run: |
-        $distDir = "${{ github.workspace }}\dist\SRK Boost"
+        $distDir = "${{ github.workspace }}\dist"
         Write-Host "DistDir: $distDir"
         New-Item -ItemType Directory -Force -Path release
         wix build installer\SrkBoost.wxs `
@@ -66,7 +65,7 @@ jobs:
           Write-Error "MSI not found!"
           exit 1
         }
-        Write-Host "MSI OK: $((Get-Item 'release\SrkBoost-v1.7-Setup.msi').Length / 1MB) MB"
+        Write-Host "MSI OK: $([math]::Round((Get-Item 'release\SrkBoost-v1.7-Setup.msi').Length / 1MB, 1)) MB"
 
     - name: Upload MSI
       uses: actions/upload-artifact@v4
@@ -75,9 +74,9 @@ jobs:
         path: release\SrkBoost-v1.7-Setup.msi
         retention-days: 30
 
-    - name: Upload Portable
+    - name: Upload Portable EXE
       uses: actions/upload-artifact@v4
       with:
-        name: SrkBoost-Portable
-        path: dist\SRK Boost\
+        name: SrkBoost-Portable-EXE
+        path: dist\SRK Boost.exe
         retention-days: 30
