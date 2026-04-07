@@ -1,5 +1,5 @@
 """
-SRK Boost - Login / Register Window  v1.0
+SRK Boost - Login / Register Window  v2.0
 Premium dark glassmorphism design.
 """
 
@@ -9,18 +9,17 @@ import logging
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QLineEdit, QPushButton, QApplication, QGraphicsDropShadowEffect,
-    QCheckBox, QStackedWidget
+    QCheckBox
 )
-from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer, QPropertyAnimation, QEasingCurve, QRect
+from PyQt6.QtCore import Qt, QThread, QObject, pyqtSignal, QTimer
 from PyQt6.QtGui import (
-    QPainter, QColor, QLinearGradient, QBrush, QPen,
-    QFont, QPixmap, QPainterPath, QRadialGradient
+    QPainter, QColor, QFont, QPixmap, QRadialGradient, QBrush, QPen
 )
 
 logger = logging.getLogger(__name__)
 
 
-# ── Worker ────────────────────────────────────────────────────────────────────
+# ── Worker (runs in thread, no blocking UI) ───────────────────────────────────
 
 class AuthWorker(QObject):
     finished = pyqtSignal(bool, str, dict)
@@ -32,466 +31,357 @@ class AuthWorker(QObject):
         self.password = password
 
     def run(self):
-        from core.auth import sign_in, sign_up
-        if self.mode == "login":
-            ok, msg, data = sign_in(self.email, self.password)
-        else:
-            ok, msg, data = sign_up(self.email, self.password)
-        self.finished.emit(ok, msg, data)
+        try:
+            from core.auth import sign_in, sign_up
+            if self.mode == "login":
+                ok, msg, data = sign_in(self.email, self.password)
+            else:
+                ok, msg, data = sign_up(self.email, self.password)
+            self.finished.emit(ok, msg, data if data else {})
+        except Exception as e:
+            self.finished.emit(False, f"Bağlantı hatası: {e}", {})
 
 
-# ── Animated input field ──────────────────────────────────────────────────────
+# ── Fancy input ───────────────────────────────────────────────────────────────
 
 class FancyInput(QFrame):
     def __init__(self, placeholder: str, icon: str = "", password: bool = False, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(54)
+        self.setFixedHeight(52)
         self.setObjectName("fancy_input")
         self._focused = False
         self._error   = False
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(10)
+        layout.setContentsMargins(14, 0, 14, 0)
+        layout.setSpacing(8)
 
         if icon:
             icon_lbl = QLabel(icon)
-            icon_lbl.setStyleSheet("font-size:16px; background:transparent; color: #4a4870;")
-            icon_lbl.setFixedWidth(22)
+            icon_lbl.setStyleSheet("font-size:15px;background:transparent;color:#3a3560;")
+            icon_lbl.setFixedWidth(20)
             layout.addWidget(icon_lbl)
 
         self.input = QLineEdit()
         self.input.setPlaceholderText(placeholder)
         if password:
             self.input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.input.setStyleSheet("""
-            QLineEdit {
-                background: transparent;
-                border: none;
-                color: #e0dcff;
-                font-size: 14px;
-                font-family: 'Segoe UI';
-            }
-            QLineEdit::placeholder { color: #3a3560; }
-        """)
-        self.input.focusInEvent  = lambda e: (self._set_focus(True),  super(QLineEdit, self.input).focusInEvent(e))
-        self.input.focusOutEvent = lambda e: (self._set_focus(False), super(QLineEdit, self.input).focusOutEvent(e))
+        self.input.setStyleSheet(
+            "QLineEdit{background:transparent;border:none;color:#e0dcff;"
+            "font-size:13px;font-family:'Segoe UI';}"
+            "QLineEdit::placeholder{color:#3a3560;}"
+        )
+        # safe focus overrides
+        orig_in  = self.input.focusInEvent
+        orig_out = self.input.focusOutEvent
+        def _fi(e): self._set_focus(True);  orig_in(e)
+        def _fo(e): self._set_focus(False); orig_out(e)
+        self.input.focusInEvent  = _fi
+        self.input.focusOutEvent = _fo
         layout.addWidget(self.input, 1)
 
         if password:
-            self._toggle = QPushButton("👁")
-            self._toggle.setFixedSize(28, 28)
-            self._toggle.setStyleSheet(
-                "background:transparent;border:none;font-size:14px;color:#3a3560;"
+            self._eye = QPushButton("👁")
+            self._eye.setFixedSize(26, 26)
+            self._eye.setStyleSheet(
+                "background:transparent;border:none;font-size:13px;color:#3a3560;"
             )
-            self._toggle.clicked.connect(self._toggle_visibility)
-            layout.addWidget(self._toggle)
-            self._visible = False
+            self._eye.clicked.connect(self._toggle_vis)
+            layout.addWidget(self._eye)
+            self._vis = False
 
         self._update_style()
 
-    def _set_focus(self, focused: bool):
-        self._focused = focused
+    def _set_focus(self, v):
+        self._focused = v
         self._update_style()
 
-    def set_error(self, error: bool):
-        self._error = error
+    def set_error(self, v):
+        self._error = v
         self._update_style()
 
     def _update_style(self):
         if self._error:
-            border = "rgba(239,68,68,0.7)"
-            bg     = "rgba(239,68,68,0.06)"
+            b, bg = "rgba(239,68,68,0.7)", "rgba(239,68,68,0.06)"
         elif self._focused:
-            border = "rgba(108,99,255,0.8)"
-            bg     = "rgba(108,99,255,0.08)"
+            b, bg = "rgba(108,99,255,0.8)", "rgba(108,99,255,0.08)"
         else:
-            border = "rgba(108,99,255,0.2)"
-            bg     = "rgba(10,8,22,0.6)"
-        self.setStyleSheet(f"""
-            QFrame#fancy_input {{
-                background: {bg};
-                border: 1.5px solid {border};
-                border-radius: 14px;
-            }}
-        """)
-
-    def _toggle_visibility(self):
-        self._visible = not self._visible
-        self.input.setEchoMode(
-            QLineEdit.EchoMode.Normal if self._visible else QLineEdit.EchoMode.Password
+            b, bg = "rgba(108,99,255,0.2)", "rgba(10,8,22,0.6)"
+        self.setStyleSheet(
+            f"QFrame#fancy_input{{background:{bg};"
+            f"border:1.5px solid {b};border-radius:13px;}}"
         )
-        self._toggle.setText("🙈" if self._visible else "👁")
 
-    def text(self) -> str:
-        return self.input.text()
+    def _toggle_vis(self):
+        self._vis = not self._vis
+        self.input.setEchoMode(
+            QLineEdit.EchoMode.Normal if self._vis else QLineEdit.EchoMode.Password
+        )
+        self._eye.setText("🙈" if self._vis else "👁")
 
-    def clear(self):
-        self.input.clear()
+    def text(self):  return self.input.text()
+    def clear(self): self.input.clear()
 
 
 # ── Login Window ──────────────────────────────────────────────────────────────
 
 class LoginWindow(QWidget):
-    login_success = pyqtSignal(dict)  # emits session data
+    login_success = pyqtSignal(dict)
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SRK Boost")
-        self.setFixedSize(460, 620)
+        self.setFixedSize(440, 600)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self._drag_pos = None
-        self._thread = None
-        self._worker = None
-        self._mode = "login"  # login | register
+        self._drag_pos  = None
+        self._thread    = None
+        self._worker    = None
         self._build_ui()
         self._center()
 
     def _center(self):
-        screen = QApplication.primaryScreen().geometry()
-        self.move(
-            (screen.width()  - self.width())  // 2,
-            (screen.height() - self.height()) // 2
-        )
+        sg = QApplication.primaryScreen().geometry()
+        self.move((sg.width()-self.width())//2, (sg.height()-self.height())//2)
 
+    # ── UI ────────────────────────────────────────────────────────────────────
     def _build_ui(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
 
-        # Card
         card = QFrame()
         card.setObjectName("login_card")
         card.setStyleSheet("""
             QFrame#login_card {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 rgba(14,12,30,0.97),
-                    stop:1 rgba(8,7,18,0.99)
-                );
+                background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+                    stop:0 rgba(14,12,30,0.97), stop:1 rgba(8,7,18,0.99));
                 border: 1px solid rgba(108,99,255,0.25);
-                border-radius: 28px;
+                border-radius: 26px;
             }
         """)
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(60)
-        shadow.setOffset(0, 20)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        card.setGraphicsEffect(shadow)
+        sh = QGraphicsDropShadowEffect()
+        sh.setBlurRadius(55); sh.setOffset(0,18); sh.setColor(QColor(0,0,0,170))
+        card.setGraphicsEffect(sh)
         root.addWidget(card)
 
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(48, 40, 48, 40)
-        layout.setSpacing(0)
+        vl = QVBoxLayout(card)
+        vl.setContentsMargins(44, 36, 44, 36)
+        vl.setSpacing(0)
 
-        # ── Logo ──────────────────────────────────────────────────────────
+        # Logo row
         logo_row = QHBoxLayout()
         logo_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_row.setSpacing(14)
-
-        # Logo image or fallback
+        logo_row.setSpacing(12)
         logo_lbl = QLabel()
-        logo_lbl.setFixedSize(52, 52)
-        logo_path = self._find_logo()
-        if logo_path:
-            pix = QPixmap(logo_path).scaled(52, 52,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
-            logo_lbl.setPixmap(pix)
-            logo_lbl.setStyleSheet(
-                "border-radius:14px;border:2px solid rgba(108,99,255,0.4);"
-                "background:#0a0914;"
-            )
+        logo_lbl.setFixedSize(48, 48)
+        lp = self._find_logo()
+        if lp:
+            px = QPixmap(lp).scaled(48,48,Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                     Qt.TransformationMode.SmoothTransformation)
+            logo_lbl.setPixmap(px)
+            logo_lbl.setStyleSheet("border-radius:12px;border:2px solid rgba(108,99,255,0.4);background:#0a0914;")
         else:
-            logo_lbl.setText("⚡")
-            logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            logo_lbl.setStyleSheet(
-                "background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #6c63ff,stop:1 #00d4ff);"
-                "border-radius:14px;font-size:24px;"
-            )
+            logo_lbl.setText("⚡"); logo_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            logo_lbl.setStyleSheet("background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #6c63ff,stop:1 #00d4ff);border-radius:12px;font-size:22px;")
+        tc = QVBoxLayout(); tc.setSpacing(1)
+        an = QLabel("SRK Boost"); an.setStyleSheet("color:#c0b8ff;font-size:20px;font-weight:900;background:transparent;")
+        as_ = QLabel("PC Performance Suite"); as_.setStyleSheet("color:#2a2850;font-size:9px;letter-spacing:1px;background:transparent;")
+        tc.addWidget(an); tc.addWidget(as_)
+        logo_row.addWidget(logo_lbl); logo_row.addLayout(tc)
+        vl.addLayout(logo_row)
+        vl.addSpacing(28)
 
-        text_col = QVBoxLayout()
-        text_col.setSpacing(2)
-        app_name = QLabel("SRK Boost")
-        app_name.setStyleSheet("color:#c0b8ff;font-size:22px;font-weight:900;background:transparent;")
-        app_sub  = QLabel("PC Performance Suite")
-        app_sub.setStyleSheet("color:#2a2850;font-size:10px;letter-spacing:1px;background:transparent;")
-        text_col.addWidget(app_name)
-        text_col.addWidget(app_sub)
-
-        logo_row.addWidget(logo_lbl)
-        logo_row.addLayout(text_col)
-        layout.addLayout(logo_row)
-        layout.addSpacing(32)
-
-        # ── Tab switcher ──────────────────────────────────────────────────
-        tab_frame = QFrame()
-        tab_frame.setStyleSheet(
-            "background:rgba(108,99,255,0.06);border-radius:14px;"
-            "border:1px solid rgba(108,99,255,0.12);"
-        )
-        tab_row = QHBoxLayout(tab_frame)
-        tab_row.setContentsMargins(4, 4, 4, 4)
-        tab_row.setSpacing(4)
-
+        # Tab switcher
+        tab_f = QFrame()
+        tab_f.setStyleSheet("background:rgba(108,99,255,0.06);border-radius:12px;border:1px solid rgba(108,99,255,0.1);")
+        tab_r = QHBoxLayout(tab_f); tab_r.setContentsMargins(4,4,4,4); tab_r.setSpacing(4)
         self._login_tab = QPushButton("Giriş Yap")
         self._reg_tab   = QPushButton("Kayıt Ol")
-        for btn in [self._login_tab, self._reg_tab]:
-            btn.setFixedHeight(38)
-            btn.setStyleSheet(
-                "border-radius:10px;font-size:13px;font-weight:700;"
-                "background:transparent;color:#3a3570;border:none;"
-            )
-        self._login_tab.clicked.connect(lambda: self._switch_mode("login"))
-        self._reg_tab.clicked.connect(lambda: self._switch_mode("register"))
-        tab_row.addWidget(self._login_tab)
-        tab_row.addWidget(self._reg_tab)
-        layout.addWidget(tab_frame)
-        layout.addSpacing(28)
+        for b in [self._login_tab, self._reg_tab]:
+            b.setFixedHeight(36)
+            b.setStyleSheet("border-radius:9px;font-size:12px;font-weight:700;background:transparent;color:#3a3570;border:none;")
+        self._login_tab.clicked.connect(lambda: self._switch("login"))
+        self._reg_tab.clicked.connect(lambda: self._switch("register"))
+        tab_r.addWidget(self._login_tab); tab_r.addWidget(self._reg_tab)
+        vl.addWidget(tab_f)
+        vl.addSpacing(22)
 
-        # ── Form ──────────────────────────────────────────────────────────
-        self._email_input = FancyInput("Email adresi", "✉", parent=self)
-        self._pass_input  = FancyInput("Şifre", "🔒", password=True, parent=self)
-        self._pass2_input = FancyInput("Şifreyi tekrarla", "🔒", password=True, parent=self)
-        self._pass2_input.setVisible(False)
+        # Inputs
+        self._email  = FancyInput("Email adresi", "✉", parent=self)
+        self._pass1  = FancyInput("Şifre", "🔒", password=True, parent=self)
+        self._pass2  = FancyInput("Şifreyi tekrarla", "🔒", password=True, parent=self)
+        self._pass2.setVisible(False)
+        vl.addWidget(self._email); vl.addSpacing(10)
+        vl.addWidget(self._pass1); vl.addSpacing(10)
+        vl.addWidget(self._pass2); vl.addSpacing(6)
 
-        layout.addWidget(self._email_input)
-        layout.addSpacing(12)
-        layout.addWidget(self._pass_input)
-        layout.addSpacing(12)
-        layout.addWidget(self._pass2_input)
-        layout.addSpacing(8)
-
-        # Remember me (login only)
+        # Remember me
         self._remember = QCheckBox("Beni hatırla")
         self._remember.setChecked(True)
         self._remember.setStyleSheet("""
-            QCheckBox { color: #3a3570; font-size: 12px; background: transparent; }
-            QCheckBox::indicator { width:16px; height:16px; border-radius:4px;
-                border:1.5px solid rgba(108,99,255,0.3); background:rgba(10,8,22,0.6); }
-            QCheckBox::indicator:checked {
-                background:rgba(108,99,255,0.7); border:1.5px solid #6c63ff; }
+            QCheckBox{color:#3a3570;font-size:11px;background:transparent;}
+            QCheckBox::indicator{width:15px;height:15px;border-radius:4px;
+                border:1.5px solid rgba(108,99,255,0.3);background:rgba(10,8,22,0.6);}
+            QCheckBox::indicator:checked{background:rgba(108,99,255,0.7);border:1.5px solid #6c63ff;}
         """)
-        layout.addWidget(self._remember)
-        layout.addSpacing(24)
+        vl.addWidget(self._remember)
+        vl.addSpacing(18)
 
-        # ── Status label ──────────────────────────────────────────────────
-        self._status_lbl = QLabel("")
-        self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_lbl.setWordWrap(True)
-        self._status_lbl.setStyleSheet(
-            "color:#ff6060;font-size:12px;background:transparent;min-height:18px;"
-        )
-        layout.addWidget(self._status_lbl)
-        layout.addSpacing(12)
+        # Status
+        self._status = QLabel("")
+        self._status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status.setWordWrap(True)
+        self._status.setStyleSheet("color:#ff6060;font-size:11px;background:transparent;min-height:16px;")
+        vl.addWidget(self._status)
+        vl.addSpacing(10)
 
-        # ── Submit button ─────────────────────────────────────────────────
-        self._submit_btn = QPushButton("Giriş Yap")
-        self._submit_btn.setFixedHeight(52)
-        self._submit_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                    stop:0 #6c63ff, stop:1 #00d4ff);
-                color: white;
-                border: none;
-                border-radius: 16px;
-                font-size: 15px;
-                font-weight: 800;
-                letter-spacing: 0.5px;
-            }
-            QPushButton:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #7d75ff, stop:1 #22ddff); }
-            QPushButton:pressed { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
-                stop:0 #5a52ee, stop:1 #00b8e0); }
-            QPushButton:disabled { background: rgba(108,99,255,0.25); color: rgba(255,255,255,0.4); }
+        # Submit
+        self._submit = QPushButton("Giriş Yap")
+        self._submit.setFixedHeight(50)
+        self._submit.setStyleSheet("""
+            QPushButton{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #6c63ff,stop:1 #00d4ff);
+                color:white;border:none;border-radius:14px;font-size:14px;font-weight:800;}
+            QPushButton:hover{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7d75ff,stop:1 #22ddff);}
+            QPushButton:disabled{background:rgba(108,99,255,0.25);color:rgba(255,255,255,0.3);}
         """)
-        self._submit_btn.clicked.connect(self._submit)
-        layout.addWidget(self._submit_btn)
-        layout.addSpacing(16)
+        self._submit.clicked.connect(self._do_submit)
+        vl.addWidget(self._submit)
+        vl.addSpacing(14)
 
-        # ── Google button ─────────────────────────────────────────────────
-        or_row = QHBoxLayout()
-        or_row.setSpacing(10)
-        line1 = QFrame(); line1.setFrameShape(QFrame.Shape.HLine)
-        line1.setStyleSheet("color:rgba(108,99,255,0.15);")
-        or_lbl = QLabel("veya")
-        or_lbl.setStyleSheet("color:#2a2850;font-size:11px;background:transparent;")
-        line2 = QFrame(); line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setStyleSheet("color:rgba(108,99,255,0.15);")
-        or_row.addWidget(line1, 1)
-        or_row.addWidget(or_lbl)
-        or_row.addWidget(line2, 1)
-        layout.addLayout(or_row)
-        layout.addSpacing(12)
+        # Divider
+        div = QHBoxLayout(); div.setSpacing(8)
+        l1 = QFrame(); l1.setFrameShape(QFrame.Shape.HLine); l1.setStyleSheet("color:rgba(108,99,255,0.15);")
+        l2 = QFrame(); l2.setFrameShape(QFrame.Shape.HLine); l2.setStyleSheet("color:rgba(108,99,255,0.15);")
+        ol = QLabel("veya"); ol.setStyleSheet("color:#2a2850;font-size:10px;background:transparent;")
+        div.addWidget(l1,1); div.addWidget(ol); div.addWidget(l2,1)
+        vl.addLayout(div)
+        vl.addSpacing(12)
 
-        self._google_btn = QPushButton("  Google ile Giriş Yap")
-        self._google_btn.setFixedHeight(48)
-        self._google_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255,255,255,0.04);
-                color: #c0b8ff;
-                border: 1.5px solid rgba(108,99,255,0.25);
-                border-radius: 14px;
-                font-size: 13px;
-                font-weight: 700;
+        # Google button — official Google colors
+        self._google = QPushButton()
+        self._google.setFixedHeight(46)
+        self._google.setText("  Google ile oturum aç")
+        self._google.setStyleSheet("""
+            QPushButton{
+                background:#ffffff;
+                color:#3c4043;
+                border:1.5px solid #dadce0;
+                border-radius:4px;
+                font-size:14px;
+                font-weight:500;
+                font-family:'Roboto','Segoe UI',sans-serif;
             }
-            QPushButton:hover {
-                background: rgba(255,255,255,0.08);
-                border-color: rgba(108,99,255,0.5);
-            }
-            QPushButton:disabled { color: rgba(255,255,255,0.3); }
+            QPushButton:hover{background:#f8f9fa;border-color:#c6c9cc;}
+            QPushButton:disabled{background:#f1f3f4;color:#aaa;}
         """)
-        # Google G icon via unicode
-        self._google_btn.setText("🌐  Google ile Giriş Yap")
-        self._google_btn.clicked.connect(self._google_login)
-        layout.addWidget(self._google_btn)
-        layout.addSpacing(16)
+        # Google G logo via SVG-like approach — use unicode G in brand color
+        self._google.clicked.connect(self._do_google)
+        vl.addWidget(self._google)
+        vl.addSpacing(14)
 
-        # ── Close button ──────────────────────────────────────────────────
-        skip_btn = QPushButton("Şimdilik atla →")
-        skip_btn.setStyleSheet(
-            "background:transparent;color:#2a2850;border:none;"
-            "font-size:11px;font-weight:600;"
-        )
-        skip_btn.clicked.connect(self._skip)
-        layout.addWidget(skip_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        # Skip
+        skip = QPushButton("Şimdilik atla →")
+        skip.setStyleSheet("background:transparent;color:#2a2850;border:none;font-size:10px;font-weight:600;")
+        skip.clicked.connect(self._skip)
+        vl.addWidget(skip, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Close X
-        close_btn = QPushButton("✕")
-        close_btn.setParent(card)
-        close_btn.setFixedSize(32, 32)
-        close_btn.move(self.width() - 86, 16)
-        close_btn.setStyleSheet(
-            "background:rgba(108,99,255,0.1);color:#4a4870;border-radius:8px;"
-            "border:none;font-size:13px;font-weight:700;"
-        )
-        close_btn.clicked.connect(self._skip)
+        # X button
+        x_btn = QPushButton("✕", card)
+        x_btn.setFixedSize(30, 30)
+        x_btn.move(self.width()-76, 14)
+        x_btn.setStyleSheet("background:rgba(108,99,255,0.1);color:#4a4870;border-radius:7px;border:none;font-size:12px;")
+        x_btn.clicked.connect(self._skip)
 
-        self._switch_mode("login")
+        self._switch("login")
 
-    def _find_logo(self) -> str:
-        if hasattr(sys, '_MEIPASS'):
-            base = sys._MEIPASS
-        else:
-            base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # ── Helpers ───────────────────────────────────────────────────────────────
+    def _find_logo(self):
+        base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         p = os.path.join(base, "assets", "logo.png")
         return p if os.path.exists(p) else ""
 
-    def _switch_mode(self, mode: str):
+    def _switch(self, mode: str):
         self._mode = mode
-        active_style = (
-            "background:rgba(108,99,255,0.7);color:#ffffff;"
-            "border-radius:10px;font-size:13px;font-weight:700;border:none;"
-        )
-        inactive_style = (
-            "background:transparent;color:#3a3570;"
-            "border-radius:10px;font-size:13px;font-weight:700;border:none;"
-        )
-        if mode == "login":
-            self._login_tab.setStyleSheet(active_style)
-            self._reg_tab.setStyleSheet(inactive_style)
-            self._submit_btn.setText("Giriş Yap")
-            self._pass2_input.setVisible(False)
-        else:
-            self._reg_tab.setStyleSheet(active_style)
-            self._login_tab.setStyleSheet(inactive_style)
-            self._submit_btn.setText("Kayıt Ol")
-            self._pass2_input.setVisible(True)
-        self._status_lbl.setText("")
-        self._email_input.set_error(False)
-        self._pass_input.set_error(False)
+        on  = "background:rgba(108,99,255,0.75);color:#fff;border-radius:9px;font-size:12px;font-weight:700;border:none;"
+        off = "background:transparent;color:#3a3570;border-radius:9px;font-size:12px;font-weight:700;border:none;"
+        self._login_tab.setStyleSheet(on  if mode=="login"    else off)
+        self._reg_tab.setStyleSheet(  on  if mode=="register" else off)
+        self._submit.setText("Giriş Yap" if mode=="login" else "Kayıt Ol")
+        self._pass2.setVisible(mode == "register")
+        self._status.setText("")
+        self._email.set_error(False); self._pass1.set_error(False)
 
-    def _submit(self):
-        email    = self._email_input.text().strip()
-        password = self._pass_input.text()
-        password2= self._pass2_input.text()
+    def _set_status(self, msg: str, color: str):
+        self._status.setStyleSheet(f"color:{color};font-size:11px;background:transparent;min-height:16px;")
+        self._status.setText(msg)
 
-        # Validate
+    # ── Submit ────────────────────────────────────────────────────────────────
+    def _do_submit(self):
+        email = self._email.text().strip()
+        pw1   = self._pass1.text()
+        pw2   = self._pass2.text()
+
         if not email or "@" not in email:
-            self._show_error("Geçerli bir email adresi girin.")
-            self._email_input.set_error(True)
-            return
-        if len(password) < 6:
-            self._show_error("Şifre en az 6 karakter olmalıdır.")
-            self._pass_input.set_error(True)
-            return
-        if self._mode == "register" and password != password2:
-            self._show_error("Şifreler eşleşmiyor.")
-            self._pass2_input.set_error(True)
-            return
+            self._set_status("❌  Geçerli bir email girin.", "#ff6060")
+            self._email.set_error(True); return
+        if len(pw1) < 6:
+            self._set_status("❌  Şifre en az 6 karakter olmalı.", "#ff6060")
+            self._pass1.set_error(True); return
+        if self._mode == "register" and pw1 != pw2:
+            self._set_status("❌  Şifreler eşleşmiyor.", "#ff6060")
+            self._pass2.set_error(True); return
 
-        self._email_input.set_error(False)
-        self._pass_input.set_error(False)
-        self._pass2_input.set_error(False)
-        self._submit_btn.setEnabled(False)
-        self._submit_btn.setText("⏳  Lütfen bekleyin...")
-        self._status_lbl.setText("")
-        self._status_lbl.setStyleSheet("color:#6c63ff;font-size:12px;background:transparent;")
-        self._status_lbl.setText("Sunucuya bağlanılıyor...")
+        self._email.set_error(False); self._pass1.set_error(False); self._pass2.set_error(False)
+        self._submit.setEnabled(False)
+        self._submit.setText("⏳  Bekleniyor...")
+        self._set_status("Sunucuya bağlanılıyor...", "#6c63ff")
 
-        self._thread = QThread()
-        self._worker = AuthWorker(self._mode, email, password)
+        self._thread = QThread(self)
+        self._worker = AuthWorker(self._mode, email, pw1)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
-        self._worker.finished.connect(self._on_auth_done)
+        self._worker.finished.connect(self._on_done)
         self._worker.finished.connect(self._thread.quit)
+        self._thread.finished.connect(self._thread.deleteLater)
         self._thread.start()
 
-    def _on_auth_done(self, ok: bool, msg: str, data: dict):
-        self._submit_btn.setEnabled(True)
-        self._submit_btn.setText("Giriş Yap" if self._mode == "login" else "Kayıt Ol")
-
+    def _on_done(self, ok: bool, msg: str, data: dict):
+        self._submit.setEnabled(True)
+        self._submit.setText("Giriş Yap" if self._mode == "login" else "Kayıt Ol")
         if ok and data.get("access_token"):
-            # Success with session
-            self._status_lbl.setStyleSheet("color:#00e87a;font-size:12px;background:transparent;")
-            self._status_lbl.setText(f"✅  {msg}")
-            QTimer.singleShot(800, lambda: self.login_success.emit(data))
+            self._set_status(f"✅  {msg}", "#00e87a")
+            QTimer.singleShot(700, lambda: self.login_success.emit(data))
         elif ok:
-            # Email confirmation needed
-            self._status_lbl.setStyleSheet("color:#f97316;font-size:12px;background:transparent;")
-            self._status_lbl.setText(f"📧  {msg}")
+            self._set_status(f"📧  {msg}", "#f97316")  # email confirm needed
         else:
-            self._show_error(msg)
+            self._set_status(f"❌  {msg}", "#ff6060")
 
-    def _show_error(self, msg: str):
-        self._status_lbl.setStyleSheet("color:#ff6060;font-size:12px;background:transparent;")
-        self._status_lbl.setText(f"❌  {msg}")
-
-    def _google_login(self):
-        self._google_btn.setEnabled(False)
-        self._google_btn.setText("⏳  Tarayıcı açılıyor...")
-        self._status_lbl.setStyleSheet("color:#6c63ff;font-size:12px;background:transparent;")
-        self._status_lbl.setText("Google hesabınızla giriş yapın...")
+    # ── Google ────────────────────────────────────────────────────────────────
+    def _do_google(self):
+        self._google.setEnabled(False)
+        self._google.setText("⏳  Tarayıcı açılıyor...")
+        self._set_status("Google hesabınızla giriş yapın...", "#6c63ff")
         from core.auth import sign_in_google
         sign_in_google(
-            on_success=self._on_google_success,
-            on_error=self._on_google_error,
+            on_success=lambda s: QTimer.singleShot(0, lambda: self._google_ok(s)),
+            on_error=lambda e:   QTimer.singleShot(0, lambda: self._google_err(e)),
         )
 
-    def _on_google_success(self, session: dict):
-        """Called from background thread — use QTimer to switch to main thread."""
-        QTimer.singleShot(0, lambda: self._finish_google(session))
-
-    def _finish_google(self, session: dict):
-        self._google_btn.setEnabled(True)
-        self._google_btn.setText("🌐  Google ile Giriş Yap")
-        self._status_lbl.setStyleSheet("color:#00e87a;font-size:12px;background:transparent;")
-        self._status_lbl.setText("✅  Google girişi başarılı!")
+    def _google_ok(self, session: dict):
+        self._google.setEnabled(True)
+        self._google.setText("  Google ile oturum aç")
+        self._set_status("✅  Google girişi başarılı!", "#00e87a")
         QTimer.singleShot(600, lambda: self.login_success.emit(session))
 
-    def _on_google_error(self, msg: str):
-        QTimer.singleShot(0, lambda: self._finish_google_err(msg))
-
-    def _finish_google_err(self, msg: str):
-        self._google_btn.setEnabled(True)
-        self._google_btn.setText("🌐  Google ile Giriş Yap")
-        self._show_error(msg)
+    def _google_err(self, msg: str):
+        self._google.setEnabled(True)
+        self._google.setText("  Google ile oturum aç")
+        self._set_status(f"❌  {msg}", "#ff6060")
 
     def _skip(self):
-        """Skip auth — launch app as guest."""
         self.login_success.emit({"guest": True})
 
-    # ── Dragging ──────────────────────────────────────────────────────────────
+    # ── Drag ──────────────────────────────────────────────────────────────────
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -503,12 +393,9 @@ class LoginWindow(QWidget):
     def mouseReleaseEvent(self, e):
         self._drag_pos = None
 
-    # ── Background glow ───────────────────────────────────────────────────────
-    def paintEvent(self, event):
+    def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        # Outer ambient glow
-        glow = QRadialGradient(self.width() / 2, self.height() / 2, 300)
-        glow.setColorAt(0, QColor(108, 99, 255, 15))
-        glow.setColorAt(1, QColor(0, 0, 0, 0))
-        p.fillRect(self.rect(), QBrush(glow))
+        g = QRadialGradient(self.width()/2, self.height()/2, 280)
+        g.setColorAt(0, QColor(108,99,255,12)); g.setColorAt(1, QColor(0,0,0,0))
+        p.fillRect(self.rect(), QBrush(g))

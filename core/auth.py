@@ -196,6 +196,7 @@ def get_current_user() -> Optional[dict]:
 
 GOOGLE_CALLBACK_PORT = 7123
 GOOGLE_REDIRECT_URI  = f"http://localhost:{GOOGLE_CALLBACK_PORT}/callback"
+GOOGLE_APP_NAME      = "SRK Boost"
 
 
 def _find_free_port() -> int:
