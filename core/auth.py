@@ -1,6 +1,6 @@
 """
-SRK Boost - Authentication  v1.0
-Supabase email/password auth — shared with website.
+SRK Boost - Authentication  v2.0
+Supabase email/password + Google OAuth — shared with website.
 Session saved locally, auto-login on next launch.
 """
 
@@ -9,8 +9,13 @@ import json
 import logging
 import urllib.request
 import urllib.error
-import hashlib
+import urllib.parse
 import time
+import threading
+import webbrowser
+import http.server
+import socket
+import secrets
 from typing import Optional, Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -178,7 +183,6 @@ def get_current_user() -> Optional[dict]:
         return None
     if is_session_valid(session):
         return session
-    # Try refresh
     ref = session.get("refresh_token")
     if ref:
         new_session = refresh_token(ref)
@@ -186,3 +190,122 @@ def get_current_user() -> Optional[dict]:
             return new_session
     clear_session()
     return None
+
+
+# ── Google OAuth (Desktop flow) ────────────────────────────────────────────────
+
+GOOGLE_CALLBACK_PORT = 7123
+GOOGLE_REDIRECT_URI  = f"http://localhost:{GOOGLE_CALLBACK_PORT}/callback"
+
+
+def _find_free_port() -> int:
+    with socket.socket() as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+
+def sign_in_google(on_success, on_error):
+    """
+    Opens browser for Google OAuth.
+    on_success(session: dict) and on_error(msg: str) are called from a background thread.
+    """
+    port = GOOGLE_CALLBACK_PORT
+    state = secrets.token_urlsafe(16)
+
+    # Build Supabase Google OAuth URL
+    params = urllib.parse.urlencode({
+        "provider": "google",
+        "redirect_to": f"http://localhost:{port}/callback",
+    })
+    auth_url = f"{SUPABASE_URL}/auth/v1/authorize?{params}"
+
+    result_holder = {}
+    server_done   = threading.Event()
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            parsed = urllib.parse.urlparse(self.path)
+            qs     = urllib.parse.parse_qs(parsed.query)
+
+            # Supabase redirects with #access_token in fragment (JS handles it)
+            # For desktop we handle the code exchange differently:
+            # Supabase sends ?code= in PKCE flow
+            code = qs.get("code", [None])[0]
+            err  = qs.get("error", [None])[0]
+
+            html_ok = b"""<html><body style='background:#080716;color:#c0b8ff;
+                font-family:Segoe UI;text-align:center;padding-top:120px'>
+                <h2>\u2705 Giri\u015f ba\u015far\u0131l\u0131!</h2>
+                <p>Bu pencereyi kapatabilirsiniz.</p></body></html>"""
+            html_err = b"""<html><body style='background:#080716;color:#ff6060;
+                font-family:Segoe UI;text-align:center;padding-top:120px'>
+                <h2>\u274c Giri\u015f ba\u015far\u0131s\u0131z</h2>
+                <p>Tekrar deneyin.</p></body></html>"""
+
+            if code:
+                result_holder["code"] = code
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(html_ok)
+            else:
+                result_holder["error"] = err or "cancelled"
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(html_err)
+            server_done.set()
+
+        def log_message(self, *args):
+            pass  # silence server logs
+
+    def _run():
+        try:
+            httpd = http.server.HTTPServer(('localhost', port), _Handler)
+            httpd.timeout = 120  # 2 min timeout
+            webbrowser.open(auth_url)
+            server_done.wait(timeout=120)
+            httpd.server_close()
+
+            if "error" in result_holder:
+                on_error("Google girişi iptal edildi.")
+                return
+            if "code" not in result_holder:
+                on_error("Zaman aşımı — tekrar deneyin.")
+                return
+
+            # Exchange code for session via Supabase
+            code = result_holder["code"]
+            status, data = _post(
+                "token?grant_type=pkce",
+                {"auth_code": code, "code_verifier": ""}
+            )
+            # Supabase PKCE code exchange
+            if status != 200:
+                # Try alternate exchange
+                url = f"{SUPABASE_URL}/auth/v1/token?grant_type=authorization_code"
+                body = json.dumps({"code": code}).encode()
+                req  = urllib.request.Request(
+                    url, data=body, headers=_headers(), method="POST"
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        status, data = resp.status, json.loads(resp.read())
+                except urllib.error.HTTPError as e:
+                    status, data = e.code, {}
+
+            if status == 200 and "access_token" in data:
+                session = {
+                    "access_token":  data["access_token"],
+                    "refresh_token": data.get("refresh_token", ""),
+                    "expires_at":    time.time() + data.get("expires_in", 3600),
+                    "user":          data.get("user", {}),
+                }
+                save_session(session)
+                on_success(session)
+            else:
+                on_error("Google girişi tamamlanamadı. Tekrar deneyin.")
+        except Exception as e:
+            on_error(f"Google hatası: {e}")
+
+    threading.Thread(target=_run, daemon=True).start()

@@ -309,6 +309,44 @@ class LoginWindow(QWidget):
         layout.addWidget(self._submit_btn)
         layout.addSpacing(16)
 
+        # ── Google button ─────────────────────────────────────────────────
+        or_row = QHBoxLayout()
+        or_row.setSpacing(10)
+        line1 = QFrame(); line1.setFrameShape(QFrame.Shape.HLine)
+        line1.setStyleSheet("color:rgba(108,99,255,0.15);")
+        or_lbl = QLabel("veya")
+        or_lbl.setStyleSheet("color:#2a2850;font-size:11px;background:transparent;")
+        line2 = QFrame(); line2.setFrameShape(QFrame.Shape.HLine)
+        line2.setStyleSheet("color:rgba(108,99,255,0.15);")
+        or_row.addWidget(line1, 1)
+        or_row.addWidget(or_lbl)
+        or_row.addWidget(line2, 1)
+        layout.addLayout(or_row)
+        layout.addSpacing(12)
+
+        self._google_btn = QPushButton("  Google ile Giriş Yap")
+        self._google_btn.setFixedHeight(48)
+        self._google_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.04);
+                color: #c0b8ff;
+                border: 1.5px solid rgba(108,99,255,0.25);
+                border-radius: 14px;
+                font-size: 13px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.08);
+                border-color: rgba(108,99,255,0.5);
+            }
+            QPushButton:disabled { color: rgba(255,255,255,0.3); }
+        """)
+        # Google G icon via unicode
+        self._google_btn.setText("🌐  Google ile Giriş Yap")
+        self._google_btn.clicked.connect(self._google_login)
+        layout.addWidget(self._google_btn)
+        layout.addSpacing(16)
+
         # ── Close button ──────────────────────────────────────────────────
         skip_btn = QPushButton("Şimdilik atla →")
         skip_btn.setStyleSheet(
@@ -418,6 +456,36 @@ class LoginWindow(QWidget):
     def _show_error(self, msg: str):
         self._status_lbl.setStyleSheet("color:#ff6060;font-size:12px;background:transparent;")
         self._status_lbl.setText(f"❌  {msg}")
+
+    def _google_login(self):
+        self._google_btn.setEnabled(False)
+        self._google_btn.setText("⏳  Tarayıcı açılıyor...")
+        self._status_lbl.setStyleSheet("color:#6c63ff;font-size:12px;background:transparent;")
+        self._status_lbl.setText("Google hesabınızla giriş yapın...")
+        from core.auth import sign_in_google
+        sign_in_google(
+            on_success=self._on_google_success,
+            on_error=self._on_google_error,
+        )
+
+    def _on_google_success(self, session: dict):
+        """Called from background thread — use QTimer to switch to main thread."""
+        QTimer.singleShot(0, lambda: self._finish_google(session))
+
+    def _finish_google(self, session: dict):
+        self._google_btn.setEnabled(True)
+        self._google_btn.setText("🌐  Google ile Giriş Yap")
+        self._status_lbl.setStyleSheet("color:#00e87a;font-size:12px;background:transparent;")
+        self._status_lbl.setText("✅  Google girişi başarılı!")
+        QTimer.singleShot(600, lambda: self.login_success.emit(session))
+
+    def _on_google_error(self, msg: str):
+        QTimer.singleShot(0, lambda: self._finish_google_err(msg))
+
+    def _finish_google_err(self, msg: str):
+        self._google_btn.setEnabled(True)
+        self._google_btn.setText("🌐  Google ile Giriş Yap")
+        self._show_error(msg)
 
     def _skip(self):
         """Skip auth — launch app as guest."""
