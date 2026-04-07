@@ -100,80 +100,103 @@ class SpeedTestWorker(QObject):
         return min(samples) if samples else 99.0
 
     def _measure_download(self) -> float:
-        url = DOWNLOAD_URL
+        """Time-based download: keep downloading for TEST_DURATION seconds."""
+        TEST_DURATION = 10  # seconds
+        # Use multiple parallel URLs to saturate high-speed connections
+        urls = [
+            "https://speed.cloudflare.com/__down?bytes=100000000",  # 100 MB
+            "https://speed.cloudflare.com/__down?bytes=100000000",
+        ]
         total_bytes = 0
         t_start = time.perf_counter()
         last_report = t_start
         last_bytes = 0
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "SRK-Boost/1.7"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                while not self._abort:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    total_bytes += len(chunk)
-                    now = time.perf_counter()
-                    if now - last_report >= 0.3:
-                        elapsed = now - last_report
-                        chunk_mbps = (total_bytes - last_bytes) * 8 / elapsed / 1_000_000
-                        self.dl_progress.emit(chunk_mbps)
-                        last_report = now
-                        last_bytes = total_bytes
-                    if time.perf_counter() - t_start > 12:
-                        break
-        except Exception as e:
-            logger.warning(f"Download error: {e}")
+        results = []
+        lock = threading.Lock()
+
+        def _dl_worker(url):
+            nonlocal total_bytes
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "SRK-Boost/1.8"})
+                with urllib.request.urlopen(req, timeout=TEST_DURATION + 3) as resp:
+                    while not self._abort:
+                        if time.perf_counter() - t_start >= TEST_DURATION:
+                            break
+                        chunk = resp.read(131072)  # 128KB chunks
+                        if not chunk:
+                            break
+                        with lock:
+                            total_bytes += len(chunk)
+            except Exception as e:
+                logger.debug(f"DL worker: {e}")
+
+        threads = [threading.Thread(target=_dl_worker, args=(u,), daemon=True) for u in urls]
+        for t in threads: t.start()
+
+        while time.perf_counter() - t_start < TEST_DURATION and not self._abort:
+            time.sleep(0.25)
+            now = time.perf_counter()
+            elapsed_interval = now - last_report
+            if elapsed_interval >= 0.25:
+                with lock:
+                    current = total_bytes
+                interval_mbps = (current - last_bytes) * 8 / elapsed_interval / 1_000_000
+                if interval_mbps > 0:
+                    self.dl_progress.emit(interval_mbps)
+                last_report = now
+                last_bytes = current
+
+        for t in threads: t.join(timeout=1)
         elapsed = time.perf_counter() - t_start
         return total_bytes * 8 / elapsed / 1_000_000 if elapsed > 0 else 0.0
 
     def _measure_upload(self) -> float:
-        data = b"0" * 10_000_000  # 10 MB
+        """Time-based upload: keep uploading for TEST_DURATION seconds."""
+        TEST_DURATION = 8
+        CHUNK = 256 * 1024  # 256KB per request
         total_sent = 0
         t_start = time.perf_counter()
         last_report = t_start
         last_sent = 0
-        chunk_size = 65536
-        try:
-            req = urllib.request.Request(
-                UPLOAD_URL, data=data,
-                headers={
-                    "User-Agent": "SRK-Boost/1.7",
-                    "Content-Type": "application/octet-stream",
-                    "Content-Length": str(len(data)),
-                },
-                method="POST"
-            )
-            # Upload in chunks via a custom approach
-            import io
-            buf = io.BytesIO(data)
-            while not self._abort:
-                chunk = buf.read(chunk_size)
-                if not chunk:
-                    break
-                total_sent += len(chunk)
-                now = time.perf_counter()
-                if now - last_report >= 0.3:
-                    elapsed = now - last_report
-                    mbps = (total_sent - last_sent) * 8 / elapsed / 1_000_000
-                    self.ul_progress.emit(mbps)
-                    last_report = now
-                    last_sent = total_sent
-                if time.perf_counter() - t_start > 10:
-                    break
-            # Send what we've buffered
-            try:
-                upload_req = urllib.request.Request(
-                    UPLOAD_URL, data=data[:total_sent],
-                    headers={"User-Agent": "SRK-Boost/1.7",
-                             "Content-Type": "application/octet-stream"},
-                    method="POST"
-                )
-                urllib.request.urlopen(upload_req, timeout=12)
-            except Exception:
-                pass
-        except Exception as e:
-            logger.warning(f"Upload error: {e}")
+        lock = threading.Lock()
+        data_chunk = b"x" * CHUNK
+
+        def _ul_worker():
+            nonlocal total_sent
+            while not self._abort and time.perf_counter() - t_start < TEST_DURATION:
+                try:
+                    req = urllib.request.Request(
+                        UPLOAD_URL, data=data_chunk,
+                        headers={
+                            "User-Agent": "SRK-Boost/1.8",
+                            "Content-Type": "application/octet-stream",
+                        },
+                        method="POST"
+                    )
+                    urllib.request.urlopen(req, timeout=5)
+                    with lock:
+                        total_sent += CHUNK
+                except Exception as e:
+                    logger.debug(f"UL worker: {e}")
+
+        # 2 parallel upload workers
+        threads = [threading.Thread(target=_ul_worker, daemon=True) for _ in range(2)]
+        for t in threads: t.start()
+
+        while time.perf_counter() - t_start < TEST_DURATION and not self._abort:
+            time.sleep(0.25)
+            now = time.perf_counter()
+            elapsed_interval = now - last_report
+            if elapsed_interval >= 0.25:
+                with lock:
+                    current = total_sent
+                interval_mbps = (current - last_sent) * 8 / elapsed_interval / 1_000_000
+                if interval_mbps > 0:
+                    self.ul_progress.emit(interval_mbps)
+                last_report = now
+                last_sent = current
+
+        for t in threads: t.join(timeout=1)
         elapsed = time.perf_counter() - t_start
         return total_sent * 8 / elapsed / 1_000_000 if elapsed > 0 else 0.0
 
