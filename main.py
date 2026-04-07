@@ -263,29 +263,11 @@ def main():
         logger.info("Main window shown.")
 
     def _show_login_or_main():
-        splash.hide()
-        # Check for saved session first
-        from core.auth import get_current_user, SUPABASE_URL
-        # If Supabase not configured, skip auth entirely
-        if "YOUR_PROJECT" in SUPABASE_URL:
-            _launch({"guest": True})
-            return
-        session = get_current_user()
-        if session:
-            logger.info("Auto-login: valid session found.")
-            _launch(session)
-            return
-        # Show login window
-        from ui.login_window import LoginWindow
-        login = LoginWindow()
-
-        def _on_login(s: dict):
-            login.hide()
-            _launch(s)
-            login.deleteLater()
-
-        login.login_success.connect(_on_login)
-        login.show()
+        try:
+            splash.hide()
+        except Exception:
+            pass
+        _launch({"guest": True})
 
     QTimer.singleShot(1800, _show_login_or_main)
 
