@@ -22,24 +22,37 @@ def resource_path(relative_path: str) -> str:
 # ── Auto dependency installer ───────────────────────────────────────────────────────────────────────────────
 
 REQUIRED_PACKAGES = [
-    ("psutil",       "psutil"),
-    ("win32api",     "pywin32"),
-    ("wmi",          "wmi"),
-    ("speedtest",    "speedtest-cli"),
-    ("qt_material",  "qt-material"),
-    ("PIL",          "Pillow"),
+    ("psutil",      "psutil"),
+    ("win32api",    "pywin32"),
+    ("wmi",         "wmi"),
+    ("speedtest",   "speedtest-cli"),
+    ("qt_material", "qt-material"),
+    ("PIL",         "Pillow"),
 ]
+
+
+def _check_importable(name: str) -> bool:
+    """Check if a package is importable without actually running its module-level code."""
+    import importlib.util
+    # speedtest.py calls sys.stdout.fileno() at module level which crashes in PyInstaller
+    # Use find_spec instead of import_module to avoid executing the module
+    try:
+        spec = importlib.util.find_spec(name)
+        return spec is not None
+    except Exception:
+        return False
 
 
 def _install_missing(splash_update_fn=None):
     """Silently install any missing packages before app starts."""
-    import importlib
     import subprocess as _sp
+    # Skip dependency check when running as PyInstaller bundle
+    # (all deps are already bundled or will fail gracefully at runtime)
+    if getattr(sys, 'frozen', False):
+        return
     missing = []
     for import_name, pip_name in REQUIRED_PACKAGES:
-        try:
-            importlib.import_module(import_name)
-        except ImportError:
+        if not _check_importable(import_name):
             missing.append((import_name, pip_name))
 
     if not missing:
