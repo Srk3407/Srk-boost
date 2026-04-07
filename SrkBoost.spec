@@ -23,7 +23,6 @@ hidden_imports = [
     'pywintypes',
     'wmi',
     'psutil',
-    'speedtest',
     'PIL',
     'PIL.Image',
     'qt_material',
