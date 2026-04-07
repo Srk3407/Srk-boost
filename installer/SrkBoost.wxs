@@ -18,20 +18,12 @@
 
     <StandardDirectory Id="ProgramFiles6432Folder">
       <Directory Id="APPLICATIONFOLDER" Name="SRK Boost">
-
         <Component Id="MainExecutable" Guid="B1C2D3E4-F5A6-7890-BCDE-F12345678901">
           <File Id="SrkBoostExe"
                 Name="SRK Boost.exe"
                 Source="$(var.DistDir)\SRK Boost.exe"
                 KeyPath="yes" />
         </Component>
-
-        <Component Id="AppAssets" Guid="C2D3E4F5-A6B7-8901-CDEF-234567890123">
-          <File Id="AssetsLogo"   Source="$(var.DistDir)\assets\logo.png"   />
-          <File Id="AssetsStyles" Source="$(var.DistDir)\assets\styles.qss" />
-          <File Id="AssetsIcon"   Source="$(var.DistDir)\assets\icon.ico"   />
-        </Component>
-
       </Directory>
     </StandardDirectory>
 
@@ -42,12 +34,11 @@
                     Name="SRK Boost"
                     Description="PC Performance Optimizer"
                     Target="[APPLICATIONFOLDER]SRK Boost.exe"
-                    WorkingDirectory="APPLICATIONFOLDER"
-                    Icon="SrkBoostIcon" />
+                    WorkingDirectory="APPLICATIONFOLDER" />
           <RemoveFolder Id="RemoveSrkBoostMenuFolder" On="uninstall" />
           <RegistryValue Root="HKCU"
                          Key="Software\SRK Boost"
-                         Name="StartMenuInstalled"
+                         Name="StartMenu"
                          Type="integer" Value="1" KeyPath="yes" />
         </Component>
       </Directory>
@@ -59,11 +50,10 @@
                   Name="SRK Boost"
                   Description="PC Performance Optimizer"
                   Target="[APPLICATIONFOLDER]SRK Boost.exe"
-                  WorkingDirectory="APPLICATIONFOLDER"
-                  Icon="SrkBoostIcon" />
+                  WorkingDirectory="APPLICATIONFOLDER" />
         <RegistryValue Root="HKCU"
                        Key="Software\SRK Boost"
-                       Name="DesktopInstalled"
+                       Name="Desktop"
                        Type="integer" Value="1" KeyPath="yes" />
       </Component>
     </StandardDirectory>
@@ -78,7 +68,6 @@
 
     <Feature Id="ProductFeature" Title="SRK Boost" Level="1">
       <ComponentRef Id="MainExecutable" />
-      <ComponentRef Id="AppAssets" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
       <ComponentRef Id="RegistryEntries" />
@@ -86,11 +75,8 @@
 
     <ui:WixUI Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="APPLICATIONFOLDER" />
-
-    <Icon Id="SrkBoostIcon" SourceFile="$(var.DistDir)\assets\icon.ico" />
-    <Property Id="ARPPRODUCTICON" Value="SrkBoostIcon" />
-    <Property Id="ARPHELPLINK"    Value="https://srkboost.com" />
-    <Property Id="ARPNOREPAIR"    Value="1" />
+    <Property Id="ARPHELPLINK" Value="https://srkboost.com" />
+    <Property Id="ARPNOREPAIR" Value="1" />
 
   </Package>
 </Wix>

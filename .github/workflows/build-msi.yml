@@ -26,18 +26,22 @@ jobs:
         pip install psutil pywin32 wmi speedtest-cli qt-material Pillow
         pip install pyinstaller
 
-    - name: Build EXE
+    - name: Build EXE with PyInstaller
       run: |
         pyinstaller SrkBoost.spec --clean --noconfirm
+        Write-Host "=== dist contents ==="
+        Get-ChildItem -Recurse "dist\SRK Boost" | Select-Object FullName | Head -30
 
-    - name: Verify EXE exists
+    - name: Verify EXE
       run: |
-        $exePath = "dist\SRK Boost\SRK Boost.exe"
-        if (!(Test-Path $exePath)) {
-          Write-Error "EXE not found at $exePath"
+        $exe = "dist\SRK Boost\SRK Boost.exe"
+        if (!(Test-Path $exe)) {
+          Write-Host "=== dist folder ==="
+          Get-ChildItem -Recurse dist | Select-Object FullName
+          Write-Error "EXE not found!"
           exit 1
         }
-        Write-Host "EXE built OK: $((Get-Item $exePath).Length / 1MB) MB"
+        Write-Host "EXE OK: $((Get-Item $exe).Length / 1MB) MB"
 
     - name: Install WiX Toolset
       run: |
@@ -48,6 +52,7 @@ jobs:
     - name: Build MSI
       run: |
         $distDir = "${{ github.workspace }}\dist\SRK Boost"
+        Write-Host "DistDir: $distDir"
         New-Item -ItemType Directory -Force -Path release
         wix build installer\SrkBoost.wxs `
           -ext WixToolset.UI.wixext `
@@ -70,7 +75,7 @@ jobs:
         path: release\SrkBoost-v1.7-Setup.msi
         retention-days: 30
 
-    - name: Upload Portable EXE
+    - name: Upload Portable
       uses: actions/upload-artifact@v4
       with:
         name: SrkBoost-Portable

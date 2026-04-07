@@ -1,21 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 # SRK Boost - PyInstaller Spec File
-# Build: pyinstaller SrkBoost.spec
+# Build: pyinstaller SrkBoost.spec --clean
 
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+import os
+from PyInstaller.utils.hooks import collect_data_files
 
 block_cipher = None
 
-# Collect qt-material theme files
-qt_material_datas = collect_data_files('qt_material')
+# qt-material theme files
+try:
+    qt_material_datas = collect_data_files('qt_material')
+except Exception:
+    qt_material_datas = []
 
-# Hidden imports (runtime-discovered modules)
 hidden_imports = [
     'PyQt6.QtCore',
     'PyQt6.QtGui',
     'PyQt6.QtWidgets',
-    'PyQt6.QtCharts',
     'PyQt6.sip',
     'win32api',
     'win32con',
@@ -32,10 +34,11 @@ hidden_imports = [
 
 a = Analysis(
     ['main.py'],
-    pathex=[],
+    pathex=['.'],
     binaries=[],
     datas=[
         ('assets/styles.qss', 'assets'),
+        ('assets/logo.png',   'assets'),
         ('assets/icon.ico',   'assets'),
         *qt_material_datas,
     ],
@@ -43,7 +46,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas', 'scipy'],
+    excludes=['tkinter', 'matplotlib', 'numpy', 'pandas', 'scipy', 'PyQt6.QtCharts'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -62,14 +65,14 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,          # No console window
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon='assets/icon.ico',
-    uac_admin=True,         # Request admin on launch
+    uac_admin=True,
     version='version_info.txt',
 )
 
