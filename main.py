@@ -247,11 +247,19 @@ def main():
 
     def _launch(session: dict):
         """Called after login/skip — show main window."""
-        splash.finish(window)
-        if session.get("access_token"):
-            user_email = session.get("user", {}).get("email", "")
-            window.setWindowTitle(f"SRK Boost  —  {user_email}")
-        window.show()
+        try:
+            splash.finish(window)
+        except Exception:
+            pass
+        try:
+            if session.get("access_token"):
+                user_email = session.get("user", {}).get("email", "")
+                window.setWindowTitle(f"SRK Boost  —  {user_email}")
+            window.show()
+            window.raise_()
+            window.activateWindow()
+        except Exception as e:
+            logger.error(f"Launch error: {e}")
         logger.info("Main window shown.")
 
     def _show_login_or_main():
@@ -270,7 +278,13 @@ def main():
         # Show login window
         from ui.login_window import LoginWindow
         login = LoginWindow()
-        login.login_success.connect(lambda s: (login.close(), _launch(s)))
+
+        def _on_login(s: dict):
+            login.hide()
+            _launch(s)
+            login.deleteLater()
+
+        login.login_success.connect(_on_login)
         login.show()
 
     QTimer.singleShot(1800, _show_login_or_main)
