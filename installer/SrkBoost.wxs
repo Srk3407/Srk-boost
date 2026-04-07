@@ -1,9 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-  SRK Boost - WiX MSI Installer
-  Build: wix build SrkBoost.wxs -ext WixToolset.UI.wixext -o SrkBoost-Setup.msi
-  Requires: WiX Toolset v5  (dotnet tool install --global wix)
--->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
@@ -17,16 +12,10 @@
     InstallerVersion="500"
     Compressed="yes">
 
-    <!-- Require Windows 10+ -->
     <Launch Condition="VersionNT &gt;= 603" Message="SRK Boost requires Windows 10 or later." />
-
-    <!-- Auto-remove older versions -->
     <MajorUpgrade DowngradeErrorMessage="A newer version of SRK Boost is already installed." />
-
-    <!-- Media -->
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <!-- ── Install Location ───────────────────────────────────────────── -->
     <StandardDirectory Id="ProgramFiles6432Folder">
       <Directory Id="APPLICATIONFOLDER" Name="SRK Boost">
 
@@ -35,20 +24,17 @@
                 Name="SRK Boost.exe"
                 Source="..\dist\SRK Boost\SRK Boost.exe"
                 KeyPath="yes" />
-          <!-- Firewall exception (optional) -->
         </Component>
 
-        <!-- All other files from PyInstaller dist folder -->
-        <Component Id="AppFiles" Guid="C2D3E4F5-A6B7-8901-CDEF-234567890123">
-          <File Id="AssetsLogo"    Source="..\dist\SRK Boost\assets\logo.png"     />
-          <File Id="AssetsStyles"  Source="..\dist\SRK Boost\assets\styles.qss"   />
-          <File Id="AssetsIcon"    Source="..\dist\SRK Boost\assets\icon.ico"     />
+        <Component Id="AppAssets" Guid="C2D3E4F5-A6B7-8901-CDEF-234567890123">
+          <File Id="AssetsLogo"   Source="..\dist\SRK Boost\assets\logo.png"   />
+          <File Id="AssetsStyles" Source="..\dist\SRK Boost\assets\styles.qss" />
+          <File Id="AssetsIcon"   Source="..\dist\SRK Boost\assets\icon.ico"   />
         </Component>
 
       </Directory>
     </StandardDirectory>
 
-    <!-- ── Start Menu ────────────────────────────────────────────────── -->
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="SrkBoostMenuFolder" Name="SRK Boost">
         <Component Id="StartMenuShortcut" Guid="D3E4F5A6-B7C8-9012-DEF0-345678901234">
@@ -67,7 +53,6 @@
       </Directory>
     </StandardDirectory>
 
-    <!-- ── Desktop Shortcut ──────────────────────────────────────────── -->
     <StandardDirectory Id="DesktopFolder">
       <Component Id="DesktopShortcut" Guid="E4F5A6B7-C8D9-0123-EF01-456789012345">
         <Shortcut Id="DesktopShortcutExe"
@@ -83,42 +68,29 @@
       </Component>
     </StandardDirectory>
 
-    <!-- ── Registry ──────────────────────────────────────────────────── -->
     <Component Id="RegistryEntries" Guid="F5A6B7C8-D9E0-1234-F012-567890123456"
                Directory="APPLICATIONFOLDER">
       <RegistryKey Root="HKLM" Key="Software\SRK Boost">
-        <RegistryValue Name="InstallPath" Type="string"  Value="[APPLICATIONFOLDER]" />
-        <RegistryValue Name="Version"     Type="string"  Value="1.7.0" />
+        <RegistryValue Name="InstallPath" Type="string" Value="[APPLICATIONFOLDER]" />
+        <RegistryValue Name="Version"     Type="string" Value="1.7.0" />
       </RegistryKey>
     </Component>
 
-    <!-- ── Feature ───────────────────────────────────────────────────── -->
     <Feature Id="ProductFeature" Title="SRK Boost" Level="1">
       <ComponentRef Id="MainExecutable" />
-      <ComponentRef Id="AppFiles" />
+      <ComponentRef Id="AppAssets" />
       <ComponentRef Id="StartMenuShortcut" />
       <ComponentRef Id="DesktopShortcut" />
       <ComponentRef Id="RegistryEntries" />
     </Feature>
 
-    <!-- ── UI (Node.js style wizard) ─────────────────────────────────── -->
     <ui:WixUI Id="WixUI_InstallDir" />
-    <UIRef Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="APPLICATIONFOLDER" />
 
-    <!-- Custom banner and dialog background -->
-    <!--
-    <WixVariable Id="WixUIBannerBmp"    Value="assets\installer_banner.bmp" />
-    <WixVariable Id="WixUIDialogBmp"    Value="assets\installer_bg.bmp" />
-    <WixVariable Id="WixUILicenseRtf"   Value="assets\license.rtf" />
-    -->
-
-    <!-- Icon -->
     <Icon Id="SrkBoostIcon" SourceFile="..\assets\icon.ico" />
-    <Property Id="ARPPRODUCTICON"    Value="SrkBoostIcon" />
-    <Property Id="ARPHELPLINK"       Value="https://srkboost.com" />
-    <Property Id="ARPURLINFOABOUT"   Value="https://srkboost.com" />
-    <Property Id="ARPNOREPAIR"       Value="1" />
+    <Property Id="ARPPRODUCTICON"  Value="SrkBoostIcon" />
+    <Property Id="ARPHELPLINK"     Value="https://srkboost.com" />
+    <Property Id="ARPNOREPAIR"     Value="1" />
 
   </Package>
 </Wix>
