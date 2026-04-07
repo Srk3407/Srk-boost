@@ -32,11 +32,12 @@ jobs:
 
     - name: Verify EXE exists
       run: |
-        if (!(Test-Path "dist\SRK Boost\SRK Boost.exe")) {
-          Write-Error "EXE not found!"
+        $exePath = "dist\SRK Boost\SRK Boost.exe"
+        if (!(Test-Path $exePath)) {
+          Write-Error "EXE not found at $exePath"
           exit 1
         }
-        Write-Host "EXE built successfully"
+        Write-Host "EXE built OK: $((Get-Item $exePath).Length / 1MB) MB"
 
     - name: Install WiX Toolset
       run: |
@@ -46,19 +47,21 @@ jobs:
 
     - name: Build MSI
       run: |
+        $distDir = "${{ github.workspace }}\dist\SRK Boost"
         New-Item -ItemType Directory -Force -Path release
         wix build installer\SrkBoost.wxs `
           -ext WixToolset.UI.wixext `
           -ext WixToolset.Util.wixext `
+          -d DistDir="$distDir" `
           -o release\SrkBoost-v1.7-Setup.msi
 
-    - name: Verify MSI exists
+    - name: Verify MSI
       run: |
         if (!(Test-Path "release\SrkBoost-v1.7-Setup.msi")) {
           Write-Error "MSI not found!"
           exit 1
         }
-        Write-Host "MSI size: $((Get-Item 'release\SrkBoost-v1.7-Setup.msi').Length / 1MB) MB"
+        Write-Host "MSI OK: $((Get-Item 'release\SrkBoost-v1.7-Setup.msi').Length / 1MB) MB"
 
     - name: Upload MSI
       uses: actions/upload-artifact@v4

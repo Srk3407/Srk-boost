@@ -22,14 +22,14 @@
         <Component Id="MainExecutable" Guid="B1C2D3E4-F5A6-7890-BCDE-F12345678901">
           <File Id="SrkBoostExe"
                 Name="SRK Boost.exe"
-                Source="..\dist\SRK Boost\SRK Boost.exe"
+                Source="$(var.DistDir)\SRK Boost.exe"
                 KeyPath="yes" />
         </Component>
 
         <Component Id="AppAssets" Guid="C2D3E4F5-A6B7-8901-CDEF-234567890123">
-          <File Id="AssetsLogo"   Source="..\dist\SRK Boost\assets\logo.png"   />
-          <File Id="AssetsStyles" Source="..\dist\SRK Boost\assets\styles.qss" />
-          <File Id="AssetsIcon"   Source="..\dist\SRK Boost\assets\icon.ico"   />
+          <File Id="AssetsLogo"   Source="$(var.DistDir)\assets\logo.png"   />
+          <File Id="AssetsStyles" Source="$(var.DistDir)\assets\styles.qss" />
+          <File Id="AssetsIcon"   Source="$(var.DistDir)\assets\icon.ico"   />
         </Component>
 
       </Directory>
@@ -87,10 +87,10 @@
     <ui:WixUI Id="WixUI_InstallDir" />
     <Property Id="WIXUI_INSTALLDIR" Value="APPLICATIONFOLDER" />
 
-    <Icon Id="SrkBoostIcon" SourceFile="..\assets\icon.ico" />
-    <Property Id="ARPPRODUCTICON"  Value="SrkBoostIcon" />
-    <Property Id="ARPHELPLINK"     Value="https://srkboost.com" />
-    <Property Id="ARPNOREPAIR"     Value="1" />
+    <Icon Id="SrkBoostIcon" SourceFile="$(var.DistDir)\assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SrkBoostIcon" />
+    <Property Id="ARPHELPLINK"    Value="https://srkboost.com" />
+    <Property Id="ARPNOREPAIR"    Value="1" />
 
   </Package>
 </Wix>

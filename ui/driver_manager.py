@@ -100,8 +100,7 @@ def get_drivers() -> List[Dict]:
         result = subprocess.run(
             ["wmic","path","win32_pnpSignedDriver",
              "get","DeviceName,DriverVersion,DriverDate,Manufacturer","/format:csv"],
-            capture_output=True, creationflags=_CREATE_NO_WINDOW, text=True, timeout=30,
-            creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess,"CREATE_NO_WINDOW") else 0
+            capture_output=True, creationflags=_CREATE_NO_WINDOW, text=True, timeout=30
         )
         if result.returncode == 0:
             lines = [l.strip() for l in result.stdout.splitlines() if l.strip() and "," in l]

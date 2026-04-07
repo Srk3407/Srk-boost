@@ -186,7 +186,7 @@ class TweakWorker(QObject):
         errors = []
         for cmd in self._cmds:
             try:
-                r = subprocess.run(cmd, shell=True, capture_output=True, creationflags=_CREATE_NO_WINDOW, creationflags=_CREATE_NO_WINDOW, text=True, timeout=8)
+                r = subprocess.run(cmd, shell=True, capture_output=True, creationflags=_CREATE_NO_WINDOW, text=True, timeout=8)
                 self.progress.emit(f"✓ {cmd.split()[0]}")
                 if r.returncode != 0 and r.stderr:
                     errors.append(r.stderr.strip())
