@@ -233,14 +233,18 @@ def sign_in_google(on_success, on_error):
             code = qs.get("code", [None])[0]
             err  = qs.get("error", [None])[0]
 
-            html_ok = b"""<html><body style='background:#080716;color:#c0b8ff;
-                font-family:Segoe UI;text-align:center;padding-top:120px'>
-                <h2>\u2705 Giri\u015f ba\u015far\u0131l\u0131!</h2>
-                <p>Bu pencereyi kapatabilirsiniz.</p></body></html>"""
-            html_err = b"""<html><body style='background:#080716;color:#ff6060;
-                font-family:Segoe UI;text-align:center;padding-top:120px'>
-                <h2>\u274c Giri\u015f ba\u015far\u0131s\u0131z</h2>
-                <p>Tekrar deneyin.</p></body></html>"""
+            html_ok = (
+                "<html><body style='background:#080716;color:#c0b8ff;"
+                "font-family:Segoe UI;text-align:center;padding-top:120px'>"
+                "<h2>\u2705 Giri\u015f ba\u015far\u0131l\u0131!</h2>"
+                "<p>Bu pencereyi kapatabilirsiniz.</p></body></html>"
+            ).encode("utf-8")
+            html_err = (
+                "<html><body style='background:#080716;color:#ff6060;"
+                "font-family:Segoe UI;text-align:center;padding-top:120px'>"
+                "<h2>\u274c Giri\u015f ba\u015far\u0131s\u0131z</h2>"
+                "<p>Tekrar deneyin.</p></body></html>"
+            ).encode("utf-8")
 
             if code:
                 result_holder["code"] = code
