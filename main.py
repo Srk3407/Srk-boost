@@ -245,13 +245,35 @@ def main():
 
     window = MainWindow()
 
-    # Close splash and show main window after short delay
-    def _show_main():
+    def _launch(session: dict):
+        """Called after login/skip — show main window."""
         splash.finish(window)
+        if session.get("access_token"):
+            user_email = session.get("user", {}).get("email", "")
+            window.setWindowTitle(f"SRK Boost  —  {user_email}")
         window.show()
         logger.info("Main window shown.")
 
-    QTimer.singleShot(1800, _show_main)
+    def _show_login_or_main():
+        splash.hide()
+        # Check for saved session first
+        from core.auth import get_current_user, SUPABASE_URL
+        # If Supabase not configured, skip auth entirely
+        if "YOUR_PROJECT" in SUPABASE_URL:
+            _launch({"guest": True})
+            return
+        session = get_current_user()
+        if session:
+            logger.info("Auto-login: valid session found.")
+            _launch(session)
+            return
+        # Show login window
+        from ui.login_window import LoginWindow
+        login = LoginWindow()
+        login.login_success.connect(lambda s: (login.close(), _launch(s)))
+        login.show()
+
+    QTimer.singleShot(1800, _show_login_or_main)
 
     logger.info("Entering Qt event loop.")
     exit_code = app.exec()
