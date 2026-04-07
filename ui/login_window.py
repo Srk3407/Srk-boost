@@ -352,7 +352,7 @@ class LoginWindow(QWidget):
             self._set_status(f"✅  {msg}", "#00e87a")
             QTimer.singleShot(700, lambda: self.login_success.emit(data))
         elif ok:
-            self._set_status(f"📧  {msg}", "#f97316")  # email confirm needed
+            self._set_status("📧  Email onayı gerekiyor — emailinizi kontrol edin ya da 'Şimdilik atla'ya basın.", "#f97316")
         else:
             self._set_status(f"❌  {msg}", "#ff6060")
 
