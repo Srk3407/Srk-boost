@@ -120,33 +120,44 @@ class MonitorWorker(QObject):
         except Exception:
             pass
 
-        # CPU Temperature — WMI (Windows) önce, psutil fallback
-        try:
-            wmi_obj = self._get_wmi()
-            if wmi_obj:
-                # OpenHardwareMonitor namespace dene
-                try:
-                    ohm = wmi.WMI(namespace="root\\OpenHardwareMonitor")
-                    for sensor in ohm.Sensor():
-                        if sensor.SensorType == "Temperature" and "CPU" in (sensor.Name or ""):
-                            stats["cpu_temp_c"] = round(float(sensor.Value), 1)
-                            break
-                except Exception:
-                    pass
-                # OHM çalışmadıysa MSAcpi_ThermalZoneTemperature dene
-                if stats["cpu_temp_c"] is None:
-                    try:
-                        w2 = wmi.WMI(namespace="root\\wmi")
-                        for t in w2.MSAcpi_ThermalZoneTemperature():
-                            kelvin = t.CurrentTemperature
-                            stats["cpu_temp_c"] = round(kelvin / 10.0 - 273.15, 1)
-                            break
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        # psutil fallback (Linux/Mac)
-        if stats["cpu_temp_c"] is None:
+        # CPU Temperature — çoklu WMI namespace dene, psutil fallback
+        if WMI_AVAILABLE and stats["cpu_temp_c"] is None:
+            # 1) OpenHardwareMonitor
+            try:
+                ohm = wmi.WMI(namespace="root\\OpenHardwareMonitor")
+                for sensor in ohm.Sensor():
+                    if getattr(sensor, 'SensorType', '') == "Temperature" and "CPU" in (getattr(sensor, 'Name', '') or ""):
+                        stats["cpu_temp_c"] = round(float(sensor.Value), 1)
+                        break
+            except Exception:
+                pass
+
+        if WMI_AVAILABLE and stats["cpu_temp_c"] is None:
+            # 2) LibreHardwareMonitor
+            try:
+                lhm = wmi.WMI(namespace="root\\LibreHardwareMonitor")
+                for sensor in lhm.Sensor():
+                    if getattr(sensor, 'SensorType', '') == "Temperature" and "CPU" in (getattr(sensor, 'Name', '') or ""):
+                        stats["cpu_temp_c"] = round(float(sensor.Value), 1)
+                        break
+            except Exception:
+                pass
+
+        if WMI_AVAILABLE and stats["cpu_temp_c"] is None:
+            # 3) MSAcpi_ThermalZoneTemperature (root\wmi)
+            try:
+                w2 = wmi.WMI(namespace="root\\wmi")
+                for t in w2.MSAcpi_ThermalZoneTemperature():
+                    kelvin = t.CurrentTemperature
+                    c = round(kelvin / 10.0 - 273.15, 1)
+                    if 0 < c < 120:  # saçma değer filtresi
+                        stats["cpu_temp_c"] = c
+                        break
+            except Exception:
+                pass
+
+        # 4) psutil fallback (Linux/Mac)
+        if stats["cpu_temp_c"] is None and PSUTIL_AVAILABLE:
             try:
                 temps = psutil.sensors_temperatures()
                 if temps:
@@ -157,38 +168,30 @@ class MonitorWorker(QObject):
             except Exception:
                 pass
 
-        # GPU clock + temperature via WMI / OpenHardwareMonitor
-        try:
-            wmi_obj = self._get_wmi()
-            if wmi_obj:
-                # OpenHardwareMonitor GPU verileri
+        # GPU clock + temp: OHM veya LHM namespace
+        if WMI_AVAILABLE and stats["gpu_clock_mhz"] is None:
+            for ns in ("root\\OpenHardwareMonitor", "root\\LibreHardwareMonitor"):
+                if stats["gpu_clock_mhz"] is not None:
+                    break
                 try:
-                    ohm = wmi.WMI(namespace="root\\OpenHardwareMonitor")
-                    gpu_clock = None
-                    gpu_temp = None
-                    gpu_load = None
-                    for sensor in ohm.Sensor():
-                        stype = sensor.SensorType or ""
-                        sname = sensor.Name or ""
-                        sparent = sensor.Parent or ""
-                        # GPU kontrolü
-                        if any(k in sparent.lower() for k in ("gpu", "nvidia", "amd", "radeon", "geforce")):
-                            if stype == "Clock" and "GPU Core" in sname and gpu_clock is None:
-                                gpu_clock = round(float(sensor.Value))
-                            elif stype == "Temperature" and gpu_temp is None:
-                                gpu_temp = round(float(sensor.Value), 1)
-                            elif stype == "Load" and "GPU Core" in sname and gpu_load is None:
-                                gpu_load = round(float(sensor.Value), 1)
-                    if gpu_clock is not None:
-                        stats["gpu_clock_mhz"] = gpu_clock
-                    if gpu_temp is not None:
-                        stats["gpu_temp_c"] = gpu_temp
-                    if gpu_load is not None:
-                        stats["gpu_percent"] = gpu_load
+                    hw = wmi.WMI(namespace=ns)
+                    for sensor in hw.Sensor():
+                        stype = getattr(sensor, 'SensorType', '') or ''
+                        sname = getattr(sensor, 'Name', '') or ''
+                        sparent = getattr(sensor, 'Parent', '') or ''
+                        is_gpu = any(k in sparent.lower() for k in ("gpu", "nvidia", "amd", "radeon", "geforce", "rx", "rtx", "gtx"))
+                        if not is_gpu:
+                            # name bazlı da dene
+                            is_gpu = any(k in sname.lower() for k in ("gpu",))
+                        if is_gpu:
+                            if stype == "Clock" and ("GPU Core" in sname or "GPU" in sname) and stats["gpu_clock_mhz"] is None:
+                                stats["gpu_clock_mhz"] = round(float(sensor.Value))
+                            elif stype == "Temperature" and stats["gpu_temp_c"] is None:
+                                stats["gpu_temp_c"] = round(float(sensor.Value), 1)
+                            elif stype == "Load" and "GPU Core" in sname and stats["gpu_percent"] is None:
+                                stats["gpu_percent"] = round(float(sensor.Value), 1)
                 except Exception:
                     pass
-        except Exception:
-            pass
 
         # Disk I/O (delta)
         try:

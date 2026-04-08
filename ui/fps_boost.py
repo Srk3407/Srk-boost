@@ -776,31 +776,40 @@ class FpsBoostPage(QWidget):
         main_layout.setContentsMargins(24, 24, 24, 24)
         main_layout.setSpacing(16)
 
-        # Header
+        # Header (page title only)
         header = QHBoxLayout()
         title = QLabel(tr("fps_boost_title"))
         title.setStyleSheet("color: #e0e0ff; font-size: 22px; font-weight: 900;")
         header.addWidget(title)
         header.addStretch()
-
-        self.select_all_btn = QPushButton("☑  Select All")
-        self.select_all_btn.setStyleSheet("background: rgba(108,99,255,0.12); color: #8b83ff; border: 1px solid rgba(108,99,255,0.35); border-radius: 8px; padding: 6px 14px; font-weight: 600;")
-        self.select_all_btn.clicked.connect(self._select_all)
-        header.addWidget(self.select_all_btn)
-
-        self.deselect_btn = QPushButton("☐  Deselect All")
-        self.deselect_btn.setStyleSheet("background: rgba(60,55,100,0.12); color: #6060a0; border: 1px solid rgba(60,55,100,0.3); border-radius: 8px; padding: 6px 14px; font-weight: 600;")
-        self.deselect_btn.clicked.connect(self._deselect_all)
-        header.addWidget(self.deselect_btn)
         main_layout.addLayout(header)
 
-        desc = QLabel(tr("fps_boost_desc"))
-        desc.setStyleSheet("color: #6060a0; font-size: 13px;")
-        main_layout.addWidget(desc)
+        # --- FPS Hizlandirma Section (Collapsible) ---
+        fps_section = self._make_collapsible_section(
+            title=tr("fps_boost_title"),
+            subtitle=tr("fps_boost_desc"),
+            accent="#6c63ff",
+            expanded=True,
+        )
+        fps_body = fps_section["body"]
+        main_layout.addWidget(fps_section["frame"])
 
-        # Tweaks list
+        fps_sel_row = QHBoxLayout()
+        self.select_all_btn = QPushButton("☑  Select All")
+        self.select_all_btn.setStyleSheet("background: rgba(108,99,255,0.12); color: #8b83ff; border: 1px solid rgba(108,99,255,0.35); border-radius: 7px; padding: 5px 12px; font-size: 11px; font-weight: 600;")
+        self.select_all_btn.clicked.connect(self._select_all)
+        self.deselect_btn = QPushButton("☐  Deselect All")
+        self.deselect_btn.setStyleSheet("background: rgba(60,55,100,0.08); color: #6060a0; border: 1px solid rgba(60,55,100,0.2); border-radius: 7px; padding: 5px 12px; font-size: 11px; font-weight: 600;")
+        self.deselect_btn.clicked.connect(self._deselect_all)
+        fps_sel_row.addStretch()
+        fps_sel_row.addWidget(self.select_all_btn)
+        fps_sel_row.addWidget(self.deselect_btn)
+        fps_body.addLayout(fps_sel_row)
+
+        # Tweaks list inside collapsible
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setMaximumHeight(420)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         scroll_widget = QWidget()
         scroll_widget.setStyleSheet("background: transparent;")
@@ -817,7 +826,7 @@ class FpsBoostPage(QWidget):
 
         self.tweaks_layout.addStretch()
         scroll.setWidget(scroll_widget)
-        main_layout.addWidget(scroll)
+        fps_body.addWidget(scroll)
 
         # --- Input Lag Reduction Section (Collapsible) ---
         il_section = self._make_collapsible_section(

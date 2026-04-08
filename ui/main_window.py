@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(tr("app_name") + " — PC Performance Optimizer")
-        self.setMinimumSize(1100, 700)
+        self.setMinimumSize(900, 600)
         self.resize(1280, 780)
 
         self._current_page = "dashboard"
