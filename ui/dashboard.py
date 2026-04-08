@@ -621,7 +621,7 @@ class DashboardPage(QWidget):
             self.stat_cpu_temp.update_value(f"{temp:.0f}°C")
         else:
             self.temp_gauge.setValue(0)
-            self.stat_cpu_temp.update_value("N/A — OHM/LHM kur")
+            self.stat_cpu_temp.update_value("— (Sıcaklık için LibreHardwareMonitor kur)")
 
         # GPU clock
         gpu_clock = stats.get("gpu_clock_mhz")

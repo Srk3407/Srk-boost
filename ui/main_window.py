@@ -14,6 +14,7 @@ from PyQt6.QtGui import QColor, QFont, QIcon
 
 from core.monitor import SystemMonitor
 from core.i18n import tr
+from core.updater import UpdateChecker, CURRENT_VERSION
 from ui.dashboard import DashboardPage
 from ui.fps_boost import FpsBoostPage
 from ui.scanner import ScannerPage
@@ -109,6 +110,10 @@ class MainWindow(QMainWindow):
 
         # Start monitor after a short delay
         QTimer.singleShot(500, self._monitor.start)
+
+        # Güncelleme kontrolü (30sn sonra arka planda)
+        self._update_checker = UpdateChecker(on_update_found=self._on_update_found)
+        QTimer.singleShot(30000, self._update_checker.start)
 
     # ── UI Setup ─────────────────────────────────────────────────────────────
 
@@ -562,6 +567,34 @@ class MainWindow(QMainWindow):
     def set_auto_game_mode(self, enabled: bool):
         """Called from Settings page to toggle Auto Game Mode."""
         self._agm_watcher.set_enabled(enabled)
+
+    def _on_update_found(self, info: dict):
+        """Güncelleme bulununca GUI thread'inde çalıştır."""
+        from PyQt6.QtCore import QMetaObject, Qt
+        # Ana thread'de çalıştırmak için signal ile
+        QMetaObject.invokeMethod(self, '_show_update_dialog',
+            Qt.ConnectionType.QueuedConnection)
+        self._pending_update = info
+
+    def _show_update_dialog(self):
+        from PyQt6.QtWidgets import QMessageBox, QPushButton
+        info = getattr(self, '_pending_update', None)
+        if not info:
+            return
+        msg = QMessageBox(self)
+        msg.setWindowTitle('🚀 Güncelleme Mevcut')
+        msg.setText(
+            f'<b>SRK Boost v{info["version"]}</b> yayınlandı!<br><br>'
+            f'Mevcut sürümünüz: v{CURRENT_VERSION}<br><br>'
+            f'<small style="color:#888">{info["notes"][:200]}</small>'
+        )
+        msg.setTextFormat(1)  # RichText
+        dl_btn = msg.addButton('⬇️ İndir', QMessageBox.ButtonRole.AcceptRole)
+        msg.addButton('⏰ Sonra Hatırlat', QMessageBox.ButtonRole.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == dl_btn:
+            from core.updater import UpdateChecker
+            UpdateChecker.open_download(info['url'])
 
     def closeEvent(self, event):
         self._monitor.stop()
