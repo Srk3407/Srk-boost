@@ -180,6 +180,72 @@ def get_drivers() -> List[Dict]:
     return drivers[:200]
 
 
+def _get_driver_url(manufacturer: str, name: str, category: str) -> str:
+    """Mapüretici ve kategoriye göre orijinal driver indirme URL'si döndürür."""
+    m = manufacturer.lower()
+    n = name.lower()
+
+    # NVIDIA
+    if any(k in m or k in n for k in ("nvidia", "geforce", "quadro", "rtx", "gtx")):
+        return "https://www.nvidia.com/en-us/drivers/"
+
+    # AMD / ATI / Radeon
+    if any(k in m or k in n for k in ("amd", "ati", "radeon", "ryzen")):
+        if category == "Display":
+            return "https://www.amd.com/en/support/download/drivers.html"
+        return "https://www.amd.com/en/support"
+
+    # Intel
+    if "intel" in m or "intel" in n:
+        return "https://www.intel.com/content/www/us/en/download-center/home.html"
+
+    # Realtek (audio/network)
+    if "realtek" in m or "realtek" in n:
+        if category == "Audio":
+            return "https://www.realtek.com/en/component/zoo/category/pc-audio-codecs-high-definition-audio-codecs-software"
+        return "https://www.realtek.com/en/downloads"
+
+    # Qualcomm / Atheros
+    if any(k in m or k in n for k in ("qualcomm", "atheros")):
+        return "https://www.qualcomm.com/support"
+
+    # Logitech
+    if "logitech" in m or "logitech" in n:
+        return "https://support.logi.com/hc/en-us/articles/360025141373"
+
+    # ASUS
+    if "asus" in m or "asus" in n:
+        return "https://www.asus.com/support/download-center/"
+
+    # MSI
+    if "msi" in m or "micro-star" in m:
+        return "https://www.msi.com/support/download/"
+
+    # Gigabyte
+    if "gigabyte" in m or "gigabyte" in n:
+        return "https://www.gigabyte.com/Support/Downloads"
+
+    # Dell
+    if "dell" in m:
+        return "https://www.dell.com/support/home/en-us/products/drivers"
+
+    # HP / Hewlett
+    if any(k in m for k in ("hp", "hewlett")):
+        return "https://support.hp.com/us-en/drivers"
+
+    # Lenovo
+    if "lenovo" in m:
+        return "https://support.lenovo.com/us/en/solutions/ht003029"
+
+    # Microsoft
+    if "microsoft" in m:
+        return "https://www.microsoft.com/en-us/download/"
+
+    # Generic fallback: manufacturer site search
+    query = f"{manufacturer} {name} driver download official".replace(" ", "+")
+    return f"https://duckduckgo.com/?q={query}&ia=web"
+
+
 class DriverWorker(QObject):
     finished = pyqtSignal(list)
     def run(self):
@@ -510,8 +576,9 @@ class DriverManagerPage(QWidget):
             """)
             dn = d.get("name","")
             mf = d.get("manufacturer","")
-            search_btn.clicked.connect(lambda _, n=dn, m=mf: webbrowser.open(
-                f"https://www.google.com/search?q={m}+{n}+driver+download".replace(" ","+")
+            cat = d.get("category","Other")
+            search_btn.clicked.connect(lambda _, n=dn, m=mf, c=cat: webbrowser.open(
+                _get_driver_url(m, n, c)
             ))
             btn_layout.addWidget(search_btn)
             self.table.setCellWidget(row, 5, btn_widget)

@@ -90,6 +90,7 @@ class MonitorWorker(QObject):
             "ram_total_gb": 0.0,
             "gpu_percent": None,
             "gpu_temp_c": None,
+            "gpu_clock_mhz": None,
             "disk_read_mbps": 0.0,
             "disk_write_mbps": 0.0,
             "net_sent_mbps": 0.0,
@@ -119,14 +120,73 @@ class MonitorWorker(QObject):
         except Exception:
             pass
 
-        # Temperatures
+        # CPU Temperature — WMI (Windows) önce, psutil fallback
         try:
-            temps = psutil.sensors_temperatures()
-            if temps:
-                for key in ("coretemp", "k10temp", "cpu_thermal", "acpitz"):
-                    if key in temps and temps[key]:
-                        stats["cpu_temp_c"] = temps[key][0].current
-                        break
+            wmi_obj = self._get_wmi()
+            if wmi_obj:
+                # OpenHardwareMonitor namespace dene
+                try:
+                    ohm = wmi.WMI(namespace="root\\OpenHardwareMonitor")
+                    for sensor in ohm.Sensor():
+                        if sensor.SensorType == "Temperature" and "CPU" in (sensor.Name or ""):
+                            stats["cpu_temp_c"] = round(float(sensor.Value), 1)
+                            break
+                except Exception:
+                    pass
+                # OHM çalışmadıysa MSAcpi_ThermalZoneTemperature dene
+                if stats["cpu_temp_c"] is None:
+                    try:
+                        w2 = wmi.WMI(namespace="root\\wmi")
+                        for t in w2.MSAcpi_ThermalZoneTemperature():
+                            kelvin = t.CurrentTemperature
+                            stats["cpu_temp_c"] = round(kelvin / 10.0 - 273.15, 1)
+                            break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        # psutil fallback (Linux/Mac)
+        if stats["cpu_temp_c"] is None:
+            try:
+                temps = psutil.sensors_temperatures()
+                if temps:
+                    for key in ("coretemp", "k10temp", "cpu_thermal", "acpitz"):
+                        if key in temps and temps[key]:
+                            stats["cpu_temp_c"] = round(temps[key][0].current, 1)
+                            break
+            except Exception:
+                pass
+
+        # GPU clock + temperature via WMI / OpenHardwareMonitor
+        try:
+            wmi_obj = self._get_wmi()
+            if wmi_obj:
+                # OpenHardwareMonitor GPU verileri
+                try:
+                    ohm = wmi.WMI(namespace="root\\OpenHardwareMonitor")
+                    gpu_clock = None
+                    gpu_temp = None
+                    gpu_load = None
+                    for sensor in ohm.Sensor():
+                        stype = sensor.SensorType or ""
+                        sname = sensor.Name or ""
+                        sparent = sensor.Parent or ""
+                        # GPU kontrolü
+                        if any(k in sparent.lower() for k in ("gpu", "nvidia", "amd", "radeon", "geforce")):
+                            if stype == "Clock" and "GPU Core" in sname and gpu_clock is None:
+                                gpu_clock = round(float(sensor.Value))
+                            elif stype == "Temperature" and gpu_temp is None:
+                                gpu_temp = round(float(sensor.Value), 1)
+                            elif stype == "Load" and "GPU Core" in sname and gpu_load is None:
+                                gpu_load = round(float(sensor.Value), 1)
+                    if gpu_clock is not None:
+                        stats["gpu_clock_mhz"] = gpu_clock
+                    if gpu_temp is not None:
+                        stats["gpu_temp_c"] = gpu_temp
+                    if gpu_load is not None:
+                        stats["gpu_percent"] = gpu_load
+                except Exception:
+                    pass
         except Exception:
             pass
 

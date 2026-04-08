@@ -544,21 +544,24 @@ class DashboardPage(QWidget):
         self.stat_ram_used = AnimatedStatCard("RAM USED", "— GB", "#00d4ff")
         self.stat_ram_free = AnimatedStatCard("RAM FREE", "— GB", "#00ff88")
         self.stat_cpu_temp = AnimatedStatCard("CPU TEMP", "—°C", "#ffaa00")
+        self.stat_gpu_clock = AnimatedStatCard("GPU CLOCK", "— MHz", "#00d4ff")
+        self.stat_gpu_temp = AnimatedStatCard("GPU TEMP", "—°C", "#ff6b6b")
         self.stat_disk_r = AnimatedStatCard("DISK READ", "— MB/s", "#a78bff")
         self.stat_disk_w = AnimatedStatCard("DISK WRITE", "— MB/s", "#ff6b6b")
         self.stat_net_in = AnimatedStatCard("NET DOWNLOAD", "— Mbps", "#00d4ff")
         self.stat_net_out = AnimatedStatCard("NET UPLOAD", "— Mbps", "#6c63ff")
 
         cards = [
-            self.stat_cpu_freq, self.stat_ram_used, self.stat_ram_free,
-            self.stat_cpu_temp, self.stat_disk_r, self.stat_disk_w,
+            self.stat_cpu_freq, self.stat_cpu_temp, self.stat_gpu_clock,
+            self.stat_gpu_temp, self.stat_ram_used, self.stat_ram_free,
+            self.stat_disk_r, self.stat_disk_w,
             self.stat_net_in, self.stat_net_out,
         ]
-        # 3 columns: rows 0-2 = 3 cards, row 3 = last 2 cards + empty
         positions = [
             (0, 0), (0, 1), (0, 2),
             (1, 0), (1, 1), (1, 2),
-            (2, 0), (2, 1),
+            (2, 0), (2, 1), (2, 2),
+            (3, 0),
         ]
         for card, (row, col) in zip(cards, positions):
             stats_grid.addWidget(card, row, col)
@@ -618,7 +621,21 @@ class DashboardPage(QWidget):
             self.stat_cpu_temp.update_value(f"{temp:.0f}°C")
         else:
             self.temp_gauge.setValue(0)
-            self.stat_cpu_temp.update_value("N/A")
+            self.stat_cpu_temp.update_value("N/A (OHM gerekli)")
+
+        # GPU clock
+        gpu_clock = stats.get("gpu_clock_mhz")
+        if gpu_clock is not None:
+            self.stat_gpu_clock.update_value(f"{gpu_clock} MHz")
+        else:
+            self.stat_gpu_clock.update_value("N/A")
+
+        # GPU temp
+        gpu_temp = stats.get("gpu_temp_c")
+        if gpu_temp is not None:
+            self.stat_gpu_temp.update_value(f"{gpu_temp:.0f}°C")
+        else:
+            self.stat_gpu_temp.update_value("N/A")
 
         # Normalize disk read: 0-200MB/s → 0-100%
         disk_pct = min(disk_r / 2, 100)
